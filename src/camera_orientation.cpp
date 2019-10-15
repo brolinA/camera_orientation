@@ -15,7 +15,7 @@
 #include<math.h>
 
 
-ros::Publisher floor_cloud_pub, wall_cloud_pub, yaw_angle, pitch_angle;
+ros::Publisher floor_cloud_pub, wall_cloud_pub, stable_cloud_pub, yaw_angle, pitch_angle;
 geometry_msgs::PointStamped pitch, yaw;
 bool find_pitch, find_yaw;
 
@@ -72,7 +72,7 @@ double angle_measurement(pcl::PointCloud<pcl::PointXYZ>::Ptr agg_cloud_pcl, int 
 		b = coeff.values[1];
 		c = coeff.values[2];
 
-		ROS_INFO("Coefficients are : %lf %lf %lf ", a, b, c);
+		//ROS_INFO("Coefficients are : %lf %lf %lf ", a, b, c);
 
 		//angle between two planes taking a plane which is in x-y plane
 		//i.e, having normal from the plane as z-axis.
@@ -85,7 +85,6 @@ double angle_measurement(pcl::PointCloud<pcl::PointXYZ>::Ptr agg_cloud_pcl, int 
 		deg_ = rad_ * 180/3.1415; 
 
 	//	ROS_INFO("Angle : %1.3lf ", deg_);
-
 
 		*indices = indices_internal;
 
@@ -115,7 +114,6 @@ double angle_measurement(pcl::PointCloud<pcl::PointXYZ>::Ptr agg_cloud_pcl, int 
 		pitch.header.stamp = ros::Time::now();
     pitch.point.x = deg_;
 		pitch_angle.publish(pitch);
-    ROS_INFO("Pitch Angle : %1.3lf ", deg_);
 	}
   return rad_;
 }
@@ -127,7 +125,7 @@ void CameraCallback(const sensor_msgs::PointCloud2& msg)
 
   pcl::PointCloud<pcl::PointXYZ>::Ptr yaw_cloud_pcl(new pcl::PointCloud<pcl::PointXYZ>);
   pcl::PointCloud<pcl::PointXYZ>::Ptr pitch_cloud_pcl(new pcl::PointCloud<pcl::PointXYZ>);
-  pcl::PointCloud<pcl::PointXYZ>::Ptr final_cloud_pcl(new pcl::PointCloud<pcl::PointXYZ>);
+  pcl::PointCloud<pcl::PointXYZ>::Ptr stable_cloud_pcl(new pcl::PointCloud<pcl::PointXYZ>);
 
   pcl::CropBox < pcl::PointXYZ > yaw_filter;
 	yaw_filter.setMin(Eigen::Vector4f(-1.0, -0.5, -0.7, 1.0));
@@ -141,18 +139,29 @@ void CameraCallback(const sensor_msgs::PointCloud2& msg)
 	pitch_filter.setInputCloud(cloud);
 	pitch_filter.filter(*pitch_cloud_pcl);
 
+  double pitch_angle_;
+
 	if(find_pitch)
-	  angle_measurement(pitch_cloud_pcl,2);
+	  pitch_angle_ = angle_measurement(pitch_cloud_pcl,2);
 
 	if (find_yaw)
 		angle_measurement(yaw_cloud_pcl,1);
 
+	pcl::CropBox < pcl::PointXYZ > final_filter;
+  final_filter.setMin(Eigen::Vector4f(-1.0, -0.5, -1.5, 1.0));
+  final_filter.setMax(Eigen::Vector4f(5.0, 0.05, 5.0, 1.0));
+  final_filter.setInputCloud(cloud);
+  final_filter.setRotation(Eigen::Vector3f(-(1.57-pitch_angle_), 0, 0));
+  final_filter.filter(*stable_cloud_pcl);
+  stable_cloud_pub.publish(*stable_cloud_pcl);
 }
+
 void load_parameters(ros::NodeHandle nh_)
 {
 	nh_.getParam("/find_pitch", find_pitch);
 	nh_.getParam("/find_yaw", find_yaw);
 }
+
 int main(int argc, char** argv) 
 {
   ros::init(argc, argv, "camera_orientation_node");
@@ -161,6 +170,7 @@ int main(int argc, char** argv)
   floor_cloud_pub = nh.advertise<sensor_msgs::PointCloud2>("floor_plane", 1, true);
   wall_cloud_pub = nh.advertise<sensor_msgs::PointCloud2>("wall_plane", 1, true);
   yaw_angle = nh.advertise<geometry_msgs::PointStamped>("yaw_angle",1,true);
+  stable_cloud_pub = nh.advertise<sensor_msgs::PointCloud2>("stabilized_cloud", 1, true);
   pitch_angle = nh.advertise<geometry_msgs::PointStamped>("pitch_angle",1,true);
   ros::Subscriber sub = nh.subscribe("/camera/depth/color/points", 1, CameraCallback);
   ros::spin();
