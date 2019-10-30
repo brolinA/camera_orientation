@@ -14,10 +14,12 @@
 #include<cmath>
 #include<math.h>
 
+#define DEBUG_TOPIC 0
 
 ros::Publisher floor_cloud_pub, wall_cloud_pub, stable_cloud_pub, yaw_angle, pitch_angle;
 geometry_msgs::PointStamped pitch, yaw;
 bool find_pitch, find_yaw;
+double height_from_ground;
 
 double angle_measurement(pcl::PointCloud<pcl::PointXYZ>::Ptr agg_cloud_pcl, int i)
 {
@@ -83,15 +85,13 @@ double angle_measurement(pcl::PointCloud<pcl::PointXYZ>::Ptr agg_cloud_pcl, int 
     rad_ = acos(slope);
 
 		deg_ = rad_ * 180/3.1415; 
-
-	//	ROS_INFO("Angle : %1.3lf ", deg_);
-
+#if DEBUG_TOPIC
+		ROS_INFO("Angle : %1.3lf ", deg_);
+#endif
 		*indices = indices_internal;
 
-		if (indices->indices.size() == 0) {
-		  ROS_ERROR("Unable to find surface.");
-		  //return;
-			}
+		if (indices->indices.size() == 0) 
+			ROS_ERROR("Unable to find surface.");
 	
 	pcl::PointCloud<pcl::PointXYZ>::Ptr subset_cloud(new pcl::PointCloud<pcl::PointXYZ>);
 
@@ -103,17 +103,21 @@ double angle_measurement(pcl::PointCloud<pcl::PointXYZ>::Ptr agg_cloud_pcl, int 
 
 	if (i ==1)
 	{
-    wall_cloud_pub.publish(*subset_cloud);
 		yaw.header.stamp = ros::Time::now();
 		yaw.point.x = deg_;
 		yaw_angle.publish(yaw);
+#if DEBUG_TOPIC
+		wall_cloud_pub.publish(*subset_cloud);
+#endif
 	}
 	else
 	{
-    floor_cloud_pub.publish(*subset_cloud);
 		pitch.header.stamp = ros::Time::now();
     pitch.point.x = deg_;
 		pitch_angle.publish(pitch);
+#if DEBUG_TOPIC
+		floor_cloud_pub.publish(*subset_cloud);
+#endif
 	}
   return rad_;
 }
@@ -134,11 +138,11 @@ void CameraCallback(const sensor_msgs::PointCloud2& msg)
 	yaw_filter.filter(*yaw_cloud_pcl);
 
 	pcl::CropBox < pcl::PointXYZ > pitch_filter;
-	pitch_filter.setMin(Eigen::Vector4f(-1.0, -0.05, -0.7, 1.0));
-	pitch_filter.setMax(Eigen::Vector4f(1.0, 0.5, 1.5, 1.0));
+	pitch_filter.setMin(Eigen::Vector4f(-1.0, 0.0, 0.0, 1.0));
+	pitch_filter.setMax(Eigen::Vector4f(1.0, height_from_ground , 2.0, 1.0));
 	pitch_filter.setInputCloud(cloud);
 	pitch_filter.filter(*pitch_cloud_pcl);
-
+  floor_cloud_pub.publish(*pitch_cloud_pcl);
   double pitch_angle_;
 
 	if(find_pitch)
@@ -158,8 +162,9 @@ void CameraCallback(const sensor_msgs::PointCloud2& msg)
 
 void load_parameters(ros::NodeHandle nh_)
 {
-	nh_.getParam("/find_pitch", find_pitch);
-	nh_.getParam("/find_yaw", find_yaw);
+	nh_.getParam("/camera_orientation/find_pitch", find_pitch);
+	nh_.getParam("/camera_orientation/find_yaw", find_yaw);
+	nh_.getParam("/camera_orientation/height_from_ground", height_from_ground);
 }
 
 int main(int argc, char** argv) 

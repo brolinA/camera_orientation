@@ -1,9 +1,9 @@
 <?xml version="1.0"?>
 <launch>
-	<node name="camera_orientation" type="camera_orientation_node" pkg="camera_orientation" output="screen"/>
-
-	<remap from="/camera/depth/color/points" to="/camera/depth/color/points" />
+	<node name="camera_orientation" type="camera_orientation_node" pkg="camera_orientation" output="screen">
+	<remap from="/camera/depth/color/points" to="/camera/depth/color/points"/>
   <param name="find_pitch" value="true"/>
   <param name="find_yaw" value="false"/>
-	
+  <param name="height_from_ground" value="0.4"/>
+	</node>
 </launch>
