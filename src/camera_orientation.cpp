@@ -142,7 +142,6 @@ void CameraCallback(const sensor_msgs::PointCloud2& msg)
 	pitch_filter.setMax(Eigen::Vector4f(1.0, height_from_ground , 2.0, 1.0));
 	pitch_filter.setInputCloud(cloud);
 	pitch_filter.filter(*pitch_cloud_pcl);
-  floor_cloud_pub.publish(*pitch_cloud_pcl);
   double pitch_angle_;
 
 	if(find_pitch)
